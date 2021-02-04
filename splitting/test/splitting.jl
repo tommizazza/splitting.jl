@@ -1,4 +1,5 @@
+import splitting
 using Test
 	@testset "greet" begin
-		@test greet() == "ciao"
+		@test splitting.greet() == "ciao"
 	end
