@@ -2,3 +2,10 @@ name = "splitting"
 uuid = "7e8eb740-8af5-4be5-8c1d-82daf8d52361"
 authors = ["tommizazza "]
 version = "0.1.0"
+
+[deps]
+DataStructures = "864edb3b-99cc-5e75-8d2d-829cb0a9cfe8"
+IntervalTrees = "524e6230-43b7-53ae-be76-1e9e4d08d11b"
+LinearAlgebraicRepresentation = "95167b0c-186a-594b-a231-52369c6de044"
+NearestNeighbors = "b8a86587-4115-5ab1-83bc-aa920d37bbce"
+SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
