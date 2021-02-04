@@ -1,9 +1,7 @@
 module splitting
-
-greet() = print("Hello World!")
-
-hi() = print("ciao mondo")
-
-hi2() = print("Prova push t")
+export greet
+function greet()
+	"ciao"
+end
 
 end # module
