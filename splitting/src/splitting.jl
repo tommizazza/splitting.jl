@@ -117,10 +117,10 @@ module splitting
 			(β,α) = a * b * c
 		else
 			if (y1==y2) == (y3==y4) || (x1==x2) == (x3==x4) # segments collinear
-				 return nothing
+				 return ()
 			else
 				 # segments parallel: no intersection
-				 return nothing
+				 return ()
 			end
 		end
 		return α,β
@@ -149,7 +149,7 @@ module splitting
 					#il punto di intersezione tra coppie di segmenti, h <-> k
 					out = intersection(line1,line2) 
 					#Se ho intersezione tra le rette (ovvero out non è nothing)
-					if out ≠ nothing
+					if out ≠ ()
 						#Controllo che i parametri α,β siano ammissibili, se lo sono
 						#li immagazzino nella struttura dati params
 						α,β = out

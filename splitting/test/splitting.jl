@@ -81,7 +81,7 @@ Lar = LinearAlgebraicRepresentation
 		#linee parallele
 		line1 = [0.0 0.0; 0.0 1.0]
 		line2 = [1.0 1.0; 0.0 1.0]
-		@test splitting.intersection(line1, line2) == nothing
+		@test splitting.intersection(line1, line2) == ()
 		#linee intersecanti come una x
 		line1 = [0.0 1.0; 0.0 1.0]
 		line2 = [1.0 0.0; 0.0 1.0]
