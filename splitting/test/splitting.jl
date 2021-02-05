@@ -1,7 +1,7 @@
 import splitting
 using Test
 using OrderedCollections
-
+using BenchmarkTools
 	@testset "coordintervals" begin
 		@test splitting.coordintervals(1, []) == OrderedDict{Array{Float64,1},Array{Int64,1}}() 
 		@test splitting.coordintervals(1, [[0.0 0.0; 0.0 0.0]]) == OrderedCollections.OrderedDict([0.0, 0.0] => [1])

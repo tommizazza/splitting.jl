@@ -170,34 +170,7 @@ module splitting
 		V,EV = congruence((W,EW))
 		return V,EV
 	end
-	function fraglines(sx::Float64=1.2,sy::Float64=1.2,sz::Float64=1.2)
-		function fraglines0(model)
-			V,EV = fragmentlines(model)
-
-			W = zeros(Float64, size(V,1), 2*length(EV))
-			EW = Array{Array{Int64,1},1}()
-			for (k,(v1,v2)) in enumerate(EV)
-				if size(V,1)==2
-					x,y = (V[:,v1] + V[:,v2]) ./ 2
-					scx,scy = x*sx, y*sy
-					t = [scx-x, scy-y]
-				elseif size(V,1)==3
-					x,y,z = (V[:,v1] + V[:,v2]) ./ 2
-					scx,scy,scz = x*sx, y*sy, z*sz
-					t = [scx-x, scy-y, scz-z]
-				end
-				W[:,2*k-1] = V[:,v1] + t
-				W[:,2*k] = V[:,v2] + t
-				push!(EW, [2*k-1, 2*k])
-			end
-			return W,EW
-		end
-		return fraglines0
-	end
-
-
-
-	
+		
 	function congruence(model)
 		W,EW = model
 		# congruent vertices
@@ -205,7 +178,7 @@ module splitting
 		r = 0.0000000001
 		near = Array{Any}(undef, size(W,2))
 		for k=1:size(W,2)
-			near[k] = cat([NearestNeighbors.inrange(balltree, W[:,k], r, true)])
+			near[k] = NearestNeighbors.inrange(balltree, W[:,k], r, true)
 		end
 		near = map(sort,near)  # check !!!
 		for k=1:size(W,2)
