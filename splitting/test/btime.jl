@@ -34,6 +34,9 @@ line2 = [1.0 0.0; 0.0 1.0]
 
 println("\n\n-BTIME FUNZIONE LINEFRAGMENTS:\n\t")
 spaceindex = splitting.spaceindex((V,EV))
+println(V)
+println(EV)
+println(spaceindex)
 @btime splitting.linefragments(V,EV,spaceindex)
 
 println("\n\n-BTIME FUNZIONE CONGRUENCE:\n\t")

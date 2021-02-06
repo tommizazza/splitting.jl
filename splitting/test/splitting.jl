@@ -15,6 +15,7 @@ Lar = LinearAlgebraicRepresentation
 		bboxes = [hcat(splitting.boundingbox(cell)...) for cell in cellpoints]
 		xboxdict = splitting.coordintervals(1,bboxes)
 		yboxdict = splitting.coordintervals(2,bboxes)
+		print(xboxdict)
 		# xs,ys are IntervalTree type
 		xs = IntervalTrees.IntervalMap{Float64, Array}()
 		for (key,boxset) in xboxdict
@@ -24,6 +25,8 @@ Lar = LinearAlgebraicRepresentation
 		for (key,boxset) in yboxdict
 			ys[tuple(key...)] = boxset
 		end
+		println(bboxes)
+		println(xs)
 		@test splitting.boxcovering(bboxes, 1, xs) == [[4, 5, 2, 1, 3], [4, 5, 2, 1, 3], [4, 5, 2, 1, 3], [6, 4, 5, 2, 1, 3], [6, 4, 5, 2, 1, 3], [6, 4, 5]]
 
 		V1 = [0.0 1.0; 
