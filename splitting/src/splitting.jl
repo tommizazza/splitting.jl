@@ -7,57 +7,47 @@ module splitting
 	using NearestNeighbors
 	using DataStructures
 	using OrderedCollections
-	
-	# Questa funzione prende in ingresso un modello (sia 2d, che 3d), e
-	# computa il suo indice spaziale (in questo caso sugli spigoli), ovvero
-	# un array di array contenente per ciascuno spigolo gli indici degli
-	# spigoli incidenti ad esso.
+	using Base.Threads
+
 	function spaceindex(model::Lar.LAR)::Array{Array{Int,1},1}
 		V,CV = model[1:2]
-		#Rilevo se il modello è in 3d o 2d (ovvero righe di V, in 3d V è una 3xN, in 2d V è una 2xN)
+		# se il modello è in 3d o 2d (guardo le righe di V, in 3d V è una 3xN, in 2d V è una 2xN)
 		dim = size(V,1)
-		#Per ogni cella 3d, isolo i suoi punti espressi da coordinate (x,y,z)
-		#ESEMPIO, se ho 2 celle, cellpoints = [[puntiCella1],[puntiCella2]]
-		cellpoints = [ V[:,CV[k]]::Lar.Points for k=1:length(CV) ]
-		#per ogni gruppo di punti associati a celle, calcolo un bounding box
-		#Un bounding box è un array così: [[xMin,xMax],[yMin,yMax],[zMin,zMax]]
-		# bboxes è un array di bbox
-		bboxes = [hcat(boundingbox(cell)...) for cell in cellpoints]
-		#Creo un dizionario ordinato del tipo [xmin,xmax] => [celle idx] tramite le parti dei bboxes
-		#Serve a creare gruppi di celle aventi stessi bounding box per un asse: 
-		xboxdict = coordintervals(1,bboxes)
-		yboxdict = coordintervals(2,bboxes)
-		# Converto i dizionari x e y in interval Trees
-		xs = IntervalTrees.IntervalMap{Float64, Array}()
-		for (key,boxset) in xboxdict
-			xs[tuple(key...)] = boxset
+		#PARALLELIZZO LA CREAZIONE DEI CELLPOINTS
+		n=length(CV)
+		cellpoints = Array{Array{Float64,2}}(undef,n)
+		@inbounds @threads for k=1:n
+			cellpoints[k] = V[:,CV[k]]::Lar.Points
 		end
-		ys = IntervalTrees.IntervalMap{Float64, Array}()
-		for (key,boxset) in yboxdict
-			ys[tuple(key...)] = boxset
+		#PARALLELIZZO LA CREAZIONE DEI BOUNDING BOXES
+		bboxes = Array{Array{Float64,2}}(undef,n)
+		@inbounds @threads for k=1:n
+			bboxes[k] = hcat(boundingbox(cellpoints[k])...)
 		end
-		#Questo passo serve a calcolare le intersezioni tra celle sulla coordinata x e y. 
-		#Per farlo verifico se le coordinate di una cella ricadono nei bounding box tramite gli 
-		#IntervalTrees
-		xcovers = boxcovering(bboxes, 1, xs)
-		ycovers = boxcovering(bboxes, 2, ys)
-		#Le celle incidenti di ogni spigolo saranno le celle incidenti su tutte le coordinate
-		covers = [intersect(pair...) for pair in zip(xcovers,ycovers)]
-		#Faccio stesso procedimento se sono in 3d, sull'asse z
-		if dim == 3
-			zboxdict = coordintervals(3,bboxes)
-			zs = IntervalTrees.IntervalMap{Float64, Array}()
-			for (key,boxset) in zboxdict
-				zs[tuple(key...)] = boxset
+		coverXYZ= Array{Array{Array{Int64,1},1}}(undef,dim)
+		#Per ogni asse x=1, y=2, z=3.....
+		@threads for i=1:dim
+			boxdict = coordintervals(i,bboxes)
+			#Creo interval tree sull'asse i
+			intTree = IntervalTrees.IntervalMap{Float64, Array}()
+			@inbounds for (key,boxset) in boxdict
+				intTree[tuple(key...)] = boxset
 			end
-			zcovers = boxcovering(bboxes, 3, zs)
-			covers = [intersect(pair...) for pair in zip(zcovers,covers)]
+			coverXYZ[i] = boxcovering(bboxes, i, intTree)     
 		end
-		# Rimuovo la cella i dal suo indice spaziale
-		for k=1:length(covers)
-			covers[k] = setdiff(covers[k],[k])
+		spaceindex = Array{Array{Any,1}}(undef,length(bboxes))
+		@inbounds @threads for i=1:n
+			spaceindex[i] = intersect((coverXYZ[1][i],coverXYZ[2][i])...)
 		end
-		return covers
+		if(dim==3)
+			@inbounds @threads for i=1:n
+			     spaceindex[i] = intersect((spaceindex[i],coverXYZ[3][i])...)
+			end
+		end
+		@inbounds @simd for k=1:length(spaceindex)
+			spaceindex[k] = setdiff(spaceindex[k],[k])
+		end
+		return spaceindex
 	end
 
 	#Questa funzione prende in input insieme di vertici e calcola il loro bounding box.
