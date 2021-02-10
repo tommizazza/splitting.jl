@@ -54,40 +54,28 @@ end
 
 #Questa funzione prende in input insieme di vertici e calcola il loro bounding box.
 #Fa cioè il minimo e il massimo delle loro coordinate su tutti gli assi.
-
 function boundingbox(vertices::Lar.Points)
-	minimum = mapslices(x->min(x...), vertices, dims=2)
-	maximum = mapslices(x->max(x...), vertices, dims=2)
-	return minimum, maximum
-end
-
-function boundingbox2(vertices::Lar.Points)
 	d=size(vertices)[1]
 	numPoints=size(vertices)[2]
 	#inizializzo gli array da ritornare [xMin, yMin, zMin] e [xMax, yMax, zMax]
-	mins::Array{Float64,1}=[]
-	maxs::Array{Float64,1}=[]
-	#per ogni asse...
-	@threads for axis=1:d
-		row = vertices[d,:]
-		#inizialmente il minimo e massimo equivalgono alle coordinate del primo punto
-		min=vertices[d]
-		max=vertices[d]
-		#per ogni punto...
-		@threads for points=2:numPoints
-			#aggiorno minimi e massimi
-			if(row[points]<min)
-				min = row[points]
+	mins = zeros(d,1)
+	maxs = zeros(d,1)
+	for i=1:d
+		mins[i]=vertices[i]
+		maxs[i]=vertices[i]
+	end
+	@threads for i=2:numPoints
+		@threads for j=1:d
+			if(vertices[j+d*(i-1)] > maxs[j])
+				maxs[j] = vertices[j+d*(i-1)]
 			end
-			if(row[points]>max)
-				max = row[points]
+			if(vertices[j+d*(i-1)] < mins[j])
+				mins[j] = vertices[j+d*(i-1)]
 			end
 		end
-		#metto i minimi e massimi calcolati nelle strutture dati
-		push!(mins,min)
-		push!(maxs,max)
 	end
-	return mins, maxs
+	
+	return (mins,maxs)
 end
 
 #Questa funzione computa un dizionario avente come chiave una coordinata [cmin,cmax], e
