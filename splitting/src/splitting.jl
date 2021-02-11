@@ -306,48 +306,98 @@ function approxVal(PRECISION)
 
 
 
-
-
-
-
-
-
-
-function bbox(vertices::Points)
-    minimum = mapslices(x->min(x...), vertices, dims=1)
-    maximum = mapslices(x->max(x...), vertices, dims=1)
-    minimum, maximum
+function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, FE1::Lar.ChainOp, V2::Lar.Points, EV2::Lar.ChainOp, FE2::Lar.ChainOp)
+    FE = blockdiag(FE1,FE2)
+    V, EV = skel_merge(V1, EV1, V2, EV2)
+    return V, EV, FE
 end
 
-function spatial_index(V::Lar.Points, EV::Lar.ChainOp, FE::Lar.ChainOp)
-    d = 3
-    faces_num = size(FE, 1)
-    IntervalsType = IntervalValue{Float64, Int64}
-    boxes1D = Array{IntervalsType, 2}(undef, 0, d)
+function face_int(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
+    vs = Lar.buildFV(EV, face)
+    retV = Lar.Points(undef, 0, 3)
+    visited_verts = []
+    for i in 1:length(vs)
+        o = V[vs[i],:]
+        j = i < length(vs) ? i+1 : 1
+        d = V[vs[j],:] - o
 
-    for fi in 1:faces_num
-        vidxs = (abs.(FE[fi:fi,:])*abs.(EV))[1,:].nzind
-        intervals = map((l,u)->IntervalsType(l,u,fi), bbox(V[vidxs, :])...)
-        boxes1D = vcat(boxes1D, intervals)
-    end
-    trees = mapslices(IntervalTree{Float64, IntervalsType}, sort(boxes1D; dims=1), dims=1)
+        err = 10e-8
+        # err = 10e-4
+        if !(-err < d[3] < err)
 
-    function intersect_intervals(intervals)
-        cells = Array{Int64,1}[]
-        for axis in 1:d
-            vs = map(i->i.value, intersect(trees[axis], intervals[axis]))
-            push!(cells, vs)
+            alpha = -o[3] / d[3]
+
+            if -err <= alpha <= 1+err
+                p = o + alpha*d
+
+                if -err < alpha < err || 1-err < alpha < 1+err
+                    if !(Lar.vin(p, visited_verts))
+                        push!(visited_verts, p)
+                        retV = [retV; reshape(p, 1, 3)]
+                    end
+                else
+                    retV = [retV; reshape(p, 1, 3)]
+                end
+            end
         end
-        mapreduce(x->x, intersect, cells)
+
     end
 
-    mapping = Array{Int64,1}[]
-    for fi in 1:faces_num
-        cell_indexes = setdiff(intersect_intervals(boxes1D[fi, :]), [fi])
-        push!(mapping, cell_indexes)
+    vnum = size(retV, 1)
+
+
+    if vnum == 1
+        vnum = 0
+        retV = Lar.Points(undef, 0, 3)
+    end
+    enum = (÷)(vnum, 2)
+    retEV = spzeros(Int8, enum, vnum)
+
+    for i in 1:enum
+        retEV[i, 2*i-1:2*i] = [-1, 1]
     end
 
-    mapping
+    retV, retEV
+end
+
+function submanifold_mapping(vs)
+    u1 = vs[2,:] - vs[1,:]
+    u2 = vs[3,:] - vs[1,:]
+    u3 = cross(u1, u2)
+    T = Matrix{Float64}(LinearAlgebra.I, 4, 4)
+    T[4, 1:3] = - vs[1,:]
+    M = Matrix{Float64}(LinearAlgebra.I, 4, 4)
+    M[1:3, 1:3] = [u1 u2 u3]
+    return T*M
+end
+
+function frag_face(V, EV, FE, sp_idx, sigma)
+
+    vs_num = size(V, 1)
+
+	# 2D transformation of sigma face
+    sigmavs = (abs.(FE[sigma:sigma,:]) * abs.(EV))[1,:].nzind
+    sV = V[sigmavs, :]
+    sEV = EV[FE[sigma, :].nzind, sigmavs]
+    M = submanifold_mapping(sV)
+    tV = ([V ones(vs_num)]*M)[:, 1:3]  # folle convertire *tutti* i vertici
+    sV = tV[sigmavs, :]
+    # sigma face intersection with faces in sp_idx[sigma]
+    for i in sp_idx[sigma]
+        tmpV, tmpEV = face_int(tV, EV, FE[i, :])
+		sV, sEV
+        sV, sEV = skel_merge(sV, sEV, tmpV, tmpEV)
+    end
+
+    # computation of 2D arrangement of sigma face
+    sV = sV[:, 1:2]
+    nV, nEV, nFE = planar_arrangement(sV, sEV, sparsevec(ones(Int8, length(sigmavs))))
+    if nV == nothing ## not possible !! ... (each original face maps to its decomposition)
+        return [], spzeros(Int8, 0,0), spzeros(Int8, 0,0)
+    end
+    nvsize = size(nV, 1)
+    nV = [nV zeros(nvsize) ones(nvsize)]*inv(M)[:, 1:3] ## ????
+    return nV, nEV, nFE
 end
 
 
