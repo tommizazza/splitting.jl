@@ -4,6 +4,7 @@ using OrderedCollections
 using BenchmarkTools
 using LinearAlgebraicRepresentation
 using IntervalTrees
+using LinearAlgebra
 Lar = LinearAlgebraicRepresentation
 
 	@testset "boxcovering" begin
@@ -118,6 +119,27 @@ Lar = LinearAlgebraicRepresentation
 		EV1 = [[1,2], [1,3]]
 		a, b = splitting.congruence((V1,EV1))
 		@test b == [[1, 2], [1, 2]] 
+		
+	end
+
+	@testset "fragface" begin
+		V=[0.8  3.8  0.8  0.8  1.6  4.6  1.6  1.6;
+ 		   0.8  0.8  3.8  0.8  1.6  1.6  4.6  1.6;
+ 		   0.8  0.8  0.8  3.8  1.6  1.6  1.6  4.6]
+		EV=[[1,2],[1,3],[1,4],[2,3],[2,4],[3,4],[5,6],[5,7],[5,8],[6,7],[6,8],[7,8]]
+		FV=[[1,2,3],[1,2,4],[1,3,4],[2,3,4],[5,6,7],[5,6,8],[5,7,8],[6,7,8]]
+		CV=[[1,2,3,4],[5,6,7,8]]
+		sp_idx=[[3,2,4],[3,1,4],[1,2,4],[3,1,2,7,5,6,8],[4,7,6,8],[4,7,5,8],[4,5,6,8],[4,7,5,6]]
+		copEV = Lar.coboundary_0(EV::Lar.Cells)
+		copFE = Lar.coboundary_1(V, FV::Lar.Cells, EV::Lar.Cells)
+		V = convert(Array{Float64,2},V') 
+		sigma=1
+		@test round.(splitting.frag_face(V,copEV,copFE,sp_idx,sigma)[1],digits=1) ==  
+			[0.8  0.8  0.8; 3.8  0.8  0.8; 0.8  3.8  0.8]
+
+		sigma=4
+		@test round.(splitting.frag_face(V,copEV,copFE,sp_idx,sigma)[1],digits=1) == 
+			 [3.8  0.8  0.8; 0.8  3.8  0.8; 0.8  0.8  3.8; 1.6  2.2  1.6; 1.6  1.6  2.2; 2.2  1.6  1.6]
 		
 	end
 	

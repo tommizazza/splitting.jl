@@ -7,6 +7,7 @@ using SparseArrays
 using NearestNeighbors
 using DataStructures
 using OrderedCollections
+using LinearAlgebra
 using Base.Threads
 
 
@@ -305,14 +306,18 @@ function approxVal(PRECISION)
 
 
 
-
+function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, V2::Lar.Points, EV2::Lar.ChainOp)
+    V = [V1; V2]
+    EV = blockdiag(EV1,EV2)
+    return V, EV
+end
 function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, FE1::Lar.ChainOp, V2::Lar.Points, EV2::Lar.ChainOp, FE2::Lar.ChainOp)
     FE = blockdiag(FE1,FE2)
     V, EV = skel_merge(V1, EV1, V2, EV2)
     return V, EV, FE
 end
 
-function face_int(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
+function face_intVecchia(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
     vs = Lar.buildFV(EV, face)
     retV = Lar.Points(undef, 0, 3)
     visited_verts = []
@@ -371,7 +376,7 @@ function submanifold_mapping(vs)
     return T*M
 end
 
-function frag_face(V, EV, FE, sp_idx, sigma)
+function frag_faceVecchia(V, EV, FE, sp_idx, sigma)
 
     vs_num = size(V, 1)
 
@@ -388,10 +393,10 @@ function frag_face(V, EV, FE, sp_idx, sigma)
 		sV, sEV
         sV, sEV = skel_merge(sV, sEV, tmpV, tmpEV)
     end
-
+    
     # computation of 2D arrangement of sigma face
     sV = sV[:, 1:2]
-    nV, nEV, nFE = planar_arrangement(sV, sEV, sparsevec(ones(Int8, length(sigmavs))))
+    nV, nEV, nFE = Lar.planar_arrangement(sV, sEV, sparsevec(ones(Int8, length(sigmavs))))
     if nV == nothing ## not possible !! ... (each original face maps to its decomposition)
         return [], spzeros(Int8, 0,0), spzeros(Int8, 0,0)
     end
@@ -400,5 +405,81 @@ function frag_face(V, EV, FE, sp_idx, sigma)
     return nV, nEV, nFE
 end
 
+function frag_face(V, EV, FE, sp_idx, sigma)
+
+    vs_num = size(V, 1)
+
+	# 2D transformation of sigma face
+    sigmavs = (abs.(FE[sigma:sigma,:]) * abs.(EV))[1,:].nzind
+    sV = V[sigmavs, :]
+    sEV = EV[FE[sigma, :].nzind, sigmavs]
+    M = submanifold_mapping(sV)
+    sV = ([sV ones(size(sV,1))]*M)[:, 1:3] 
+    # sigma face intersection with faces in sp_idx[sigma]
+    for i in sp_idx[sigma]
+	faceivs = (abs.(FE[i:i,:]) * abs.(EV))[1,:].nzind
+	faceiV = V[faceivs, :]
+	tV = ([faceiV ones(size(faceiV, 1))]*M)[:, 1:3]  
+        tmpV, tmpEV = face_int(tV, EV, FE[i, :])
+        sV, sEV = skel_merge(sV, sEV, tmpV, tmpEV)
+    end
+    
+    # computation of 2D arrangement of sigma face
+    sV = sV[:, 1:2]
+    nV, nEV, nFE = Lar.Arrangement.planar_arrangement(sV, sEV, sparsevec(ones(Int8, length(sigmavs))))
+    if nV == nothing ## not possible !! ... (each original face maps to its decomposition)
+        return [], spzeros(Int8, 0,0), spzeros(Int8, 0,0)
+    end
+    nvsize = size(nV, 1)
+    nV = [nV zeros(nvsize) ones(nvsize)]*inv(M)[:, 1:3] ## ????
+    return nV, nEV, nFE
+    
+end
+
+function face_int(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
+    retV = Lar.Points(undef, 0, 3)
+    visited_verts = []
+    for i in 1:size(V,1)
+        o = V[i,:]
+        j = i < size(V,1) ? i+1 : 1
+        d = V[j,:] - o
+        err = 10e-8
+        # err = 10e-4
+        if !(-err < d[3] < err)
+
+            alpha = -o[3] / d[3]
+
+            if -err <= alpha <= 1+err
+                p = o + alpha*d
+
+                if -err < alpha < err || 1-err < alpha < 1+err
+                    if !(Lar.vin(p, visited_verts))
+                        push!(visited_verts, p)
+                        retV = [retV; reshape(p, 1, 3)]
+                    end
+                else
+                    retV = [retV; reshape(p, 1, 3)]
+                end
+            end
+        end
+
+    end
+
+    vnum = size(retV, 1)
+
+
+    if vnum == 1
+        vnum = 0
+        retV = Lar.Points(undef, 0, 3)
+    end
+    enum = (÷)(vnum, 2)
+    retEV = spzeros(Int8, enum, vnum)
+
+    for i in 1:enum
+        retEV[i, 2*i-1:2*i] = [-1, 1]
+    end
+
+    retV, retEV
+end
 
 end # module
