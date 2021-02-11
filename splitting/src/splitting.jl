@@ -294,4 +294,61 @@ function approxVal(PRECISION)
 	end
 	return approxVal0
 	end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+function bbox(vertices::Points)
+    minimum = mapslices(x->min(x...), vertices, dims=1)
+    maximum = mapslices(x->max(x...), vertices, dims=1)
+    minimum, maximum
+end
+
+function spatial_index(V::Lar.Points, EV::Lar.ChainOp, FE::Lar.ChainOp)
+    d = 3
+    faces_num = size(FE, 1)
+    IntervalsType = IntervalValue{Float64, Int64}
+    boxes1D = Array{IntervalsType, 2}(undef, 0, d)
+
+    for fi in 1:faces_num
+        vidxs = (abs.(FE[fi:fi,:])*abs.(EV))[1,:].nzind
+        intervals = map((l,u)->IntervalsType(l,u,fi), bbox(V[vidxs, :])...)
+        boxes1D = vcat(boxes1D, intervals)
+    end
+    trees = mapslices(IntervalTree{Float64, IntervalsType}, sort(boxes1D; dims=1), dims=1)
+
+    function intersect_intervals(intervals)
+        cells = Array{Int64,1}[]
+        for axis in 1:d
+            vs = map(i->i.value, intersect(trees[axis], intervals[axis]))
+            push!(cells, vs)
+        end
+        mapreduce(x->x, intersect, cells)
+    end
+
+    mapping = Array{Int64,1}[]
+    for fi in 1:faces_num
+        cell_indexes = setdiff(intersect_intervals(boxes1D[fi, :]), [fi])
+        push!(mapping, cell_indexes)
+    end
+
+    mapping
+end
+
+
 end # module
