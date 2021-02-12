@@ -142,4 +142,19 @@ Lar = LinearAlgebraicRepresentation
 			 [3.8  0.8  0.8; 0.8  3.8  0.8; 0.8  0.8  3.8; 1.6  2.2  1.6; 1.6  1.6  2.2; 2.2  1.6  1.6]
 		
 	end
+
+	@testset "face_int" begin
+		tV =  [9.0   9.0  -27.0;
+		       0.0   0.0    0.0;
+		       9.0  18.0    0.0]
+		EV=[[1,2],[1,3],[1,4],[2,3],[2,4],[3,4],[5,6],[5,7],[5,8],[6,7],[6,8],[7,8]]
+		copEV = Lar.coboundary_0(EV::Lar.Cells)
+		a = splitting.face_int(tV, copEV) 
+		@test a[1] == Any[0.0 0.0 0.0; 9.0 18.0 0.0]
+		tV =  [  9.0   9.0  -27.0;
+			 18.0   9.0    0.0;
+ 			 9.0  18.0    0.0]
+		a = splitting.face_int(tV, copEV) 
+		@test a[1] == round.(Any[17.999999999999996 8.999999999999998 0.0; 8.999999999999998 17.999999999999996 0.0], digits = 1)
+	end
 	

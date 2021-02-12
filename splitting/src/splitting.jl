@@ -420,7 +420,7 @@ function frag_face(V, EV, FE, sp_idx, sigma)
 	faceivs = (abs.(FE[i:i,:]) * abs.(EV))[1,:].nzind
 	faceiV = V[faceivs, :]
 	tV = ([faceiV ones(size(faceiV, 1))]*M)[:, 1:3]  
-        tmpV, tmpEV = face_int(tV, EV, FE[i, :])
+        tmpV, tmpEV = face_int(tV, EV)
         sV, sEV = skel_merge(sV, sEV, tmpV, tmpEV)
     end
     
@@ -436,7 +436,7 @@ function frag_face(V, EV, FE, sp_idx, sigma)
     
 end
 
-function face_int(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
+function face_int(V::Lar.Points, EV::Lar.ChainOp)
     retV = Lar.Points(undef, 0, 3)
     visited_verts = []
     for i in 1:size(V,1)
