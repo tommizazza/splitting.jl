@@ -157,4 +157,21 @@ Lar = LinearAlgebraicRepresentation
 		a = splitting.face_int(tV, copEV) 
 		@test a[1] == round.(Any[17.999999999999996 8.999999999999998 0.0; 8.999999999999998 17.999999999999996 0.0], digits = 1)
 	end
-	
+
+	@testset "planar_1" begin
+		V=[1.0 4.0 1.0 4.0 0.0 3.0 0.0 3.0; 1.0 1.0 4.0 4.0 0.0 0.0 3.0 3.0  ]
+		EV=[[1, 2], [3, 4], [1, 3], [2, 4], [5, 6], [7, 8], [5, 7], [6, 8]]
+		W = convert(Lar.Points, V')
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		cop_EW = convert(Lar.ChainOp, cop_EV)
+		V, copEV, copFE = splitting.planar_arrangement_1(W,cop_EW)
+		@test V == [1.0 1.0; 4.0 1.0; 3.0 1.0; 1.0 4.0; 4.0 4.0; 1.0 3.0; 0.0 0.0; 3.0 0.0; 0.0 3.0; 3.0 3.0]
+		V = [0.0 1.0 0.0 0.0 -1.0 -1.0; 
+		     0.0 0.0 1.0 0.5  0.0  0.5]
+		EV = [[1,2],[1,3],[2,3],[4,5],[4,6],[5,6]]
+		W = convert(Lar.Points, V')
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		cop_EW = convert(Lar.ChainOp, cop_EV)
+		V, copEV, copFE = splitting.planar_arrangement_1(W,cop_EW)
+		@test V == [0.0 0.0; 1.0 0.0; 0.0 1.0; 0.0 0.5; -1.0 0.0; -1.0 0.5] 
+	end

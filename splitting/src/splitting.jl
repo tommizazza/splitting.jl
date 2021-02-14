@@ -317,54 +317,6 @@ function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, FE1::Lar.ChainOp, V2::Lar.
     return V, EV, FE
 end
 
-function face_intVecchia(V::Lar.Points, EV::Lar.ChainOp, face::Lar.Cell)
-    vs = Lar.buildFV(EV, face)
-    retV = Lar.Points(undef, 0, 3)
-    visited_verts = []
-    for i in 1:length(vs)
-        o = V[vs[i],:]
-        j = i < length(vs) ? i+1 : 1
-        d = V[vs[j],:] - o
-
-        err = 10e-8
-        # err = 10e-4
-        if !(-err < d[3] < err)
-
-            alpha = -o[3] / d[3]
-
-            if -err <= alpha <= 1+err
-                p = o + alpha*d
-
-                if -err < alpha < err || 1-err < alpha < 1+err
-                    if !(Lar.vin(p, visited_verts))
-                        push!(visited_verts, p)
-                        retV = [retV; reshape(p, 1, 3)]
-                    end
-                else
-                    retV = [retV; reshape(p, 1, 3)]
-                end
-            end
-        end
-
-    end
-
-    vnum = size(retV, 1)
-
-
-    if vnum == 1
-        vnum = 0
-        retV = Lar.Points(undef, 0, 3)
-    end
-    enum = (÷)(vnum, 2)
-    retEV = spzeros(Int8, enum, vnum)
-
-    for i in 1:enum
-        retEV[i, 2*i-1:2*i] = [-1, 1]
-    end
-
-    retV, retEV
-end
-
 function submanifold_mapping(vs)
     u1 = vs[2,:] - vs[1,:]
     u2 = vs[3,:] - vs[1,:]
@@ -374,35 +326,6 @@ function submanifold_mapping(vs)
     M = Matrix{Float64}(LinearAlgebra.I, 4, 4)
     M[1:3, 1:3] = [u1 u2 u3]
     return T*M
-end
-
-function frag_faceVecchia(V, EV, FE, sp_idx, sigma)
-
-    vs_num = size(V, 1)
-
-	# 2D transformation of sigma face
-    sigmavs = (abs.(FE[sigma:sigma,:]) * abs.(EV))[1,:].nzind
-    sV = V[sigmavs, :]
-    sEV = EV[FE[sigma, :].nzind, sigmavs]
-    M = submanifold_mapping(sV)
-    tV = ([V ones(vs_num)]*M)[:, 1:3]  # folle convertire *tutti* i vertici
-    sV = tV[sigmavs, :]
-    # sigma face intersection with faces in sp_idx[sigma]
-    for i in sp_idx[sigma]
-        tmpV, tmpEV = face_int(tV, EV, FE[i, :])
-		sV, sEV
-        sV, sEV = skel_merge(sV, sEV, tmpV, tmpEV)
-    end
-    
-    # computation of 2D arrangement of sigma face
-    sV = sV[:, 1:2]
-    nV, nEV, nFE = Lar.planar_arrangement(sV, sEV, sparsevec(ones(Int8, length(sigmavs))))
-    if nV == nothing ## not possible !! ... (each original face maps to its decomposition)
-        return [], spzeros(Int8, 0,0), spzeros(Int8, 0,0)
-    end
-    nvsize = size(nV, 1)
-    nV = [nV zeros(nvsize) ones(nvsize)]*inv(M)[:, 1:3] ## ????
-    return nV, nEV, nFE
 end
 
 function frag_face(V, EV, FE, sp_idx, sigma)
@@ -480,6 +403,161 @@ function face_int(V::Lar.Points, EV::Lar.ChainOp)
     end
 
     retV, retEV
+end
+
+function planar_arrangement_1( V,copEV,sigma::Lar.Chain=spzeros(Int8,0),
+                               return_edge_map::Bool=false,multiproc::Bool=false)
+	# data structures initialization
+	edgenum = size(copEV, 1)
+	edge_map = Array{Array{Int, 1}, 1}(undef,edgenum)
+	rV = Lar.Points(zeros(0, 2))
+	rEV = SparseArrays.spzeros(Int8, 0, 0)
+	finalcells_num = 0
+
+	# spaceindex computation
+	model = (convert(Lar.Points,V'),Lar.cop2lar(copEV))
+	bigPI = spaceindex(model::Lar.LAR)
+
+    
+        # sequential (iterative) processing of edge fragmentation
+        for i in 1:edgenum
+            v, ev = frag_edge(V, copEV, i, bigPI)
+            newedges_nums = map(x->x+finalcells_num, collect(1:size(ev, 1)))
+            edge_map[i] = newedges_nums
+            finalcells_num += size(ev, 1)
+            rV = convert(Lar.Points, rV)
+            rV, rEV = skel_merge(rV, rEV, v, ev)
+        end
+    
+    # merging of close vertices and edges (2D congruence)
+    V, copEV = rV, rEV
+    V, copEV = merge_vertices!(V, copEV, edge_map)
+	return V,copEV,sigma,edge_map
+end
+
+function frag_edge(V, EV::Lar.ChainOp, edge_idx::Int, bigPI)
+    alphas = Dict{Float64, Int}()
+    edge = EV[edge_idx, :]
+    verts = V[edge.nzind, :]
+    for i in bigPI[edge_idx]
+        if i != edge_idx
+            intersection = intersect_edges(V, edge, EV[i, :])
+            for (point, alpha) in intersection
+                verts = [verts; point]
+                alphas[alpha] = size(verts, 1)
+            end
+        end
+    end
+    alphas[0.0], alphas[1.0] = [1, 2]
+    alphas_keys = sort(collect(keys(alphas)))
+    edge_num = length(alphas_keys)-1
+    verts_num = size(verts, 1)
+    ev = SparseArrays.spzeros(Int8, edge_num, verts_num)
+    for i in 1:edge_num
+        ev[i, alphas[alphas_keys[i]]] = 1
+        ev[i, alphas[alphas_keys[i+1]]] = 1
+    end
+    return verts, ev
+end
+
+
+"""
+    intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
+Intersect two 2D edges (`edge1` and `edge2`).
+"""
+function intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
+    err = 10e-8
+
+    x1, y1, x2, y2 = vcat(map(c->V[c, :], edge1.nzind)...)
+    x3, y3, x4, y4 = vcat(map(c->V[c, :], edge2.nzind)...)
+    ret = Array{Tuple{Lar.Points, Float64}, 1}()
+
+    v1 = [x2-x1, y2-y1];
+    v2 = [x4-x3, y4-y3];
+    v3 = [x3-x1, y3-y1];
+    ang1 = dot(normalize(v1), normalize(v2))
+    ang2 = dot(normalize(v1), normalize(v3))
+    parallel = 1-err < abs(ang1) < 1+err
+    colinear = parallel && (1-err < abs(ang2) < 1+err || -err < norm(v3) < err)
+    if colinear
+        o = [x1 y1]
+        v = [x2 y2] - o
+        alpha = 1/dot(v,v')
+        ps = [x3 y3; x4 y4]
+        for i in 1:2
+            a = alpha*dot(v',(reshape(ps[i, :], 1, 2)-o))
+            if 0 < a < 1
+                push!(ret, (ps[i:i, :], a))
+            end
+        end
+    elseif !parallel
+        denom = (v2[2])*(v1[1]) - (v2[1])*(v1[2])
+        a = ((v2[1])*(-v3[2]) - (v2[2])*(-v3[1])) / denom
+        b = ((v1[1])*(-v3[2]) - (v1[2])*(-v3[1])) / denom
+
+        if -err < a < 1+err && -err <= b <= 1+err
+            p = [(x1 + a*(x2-x1))  (y1 + a*(y2-y1))]
+            push!(ret, (p, a))
+        end
+    end
+    return ret
+end
+
+
+"""
+    merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
+Merge congruent vertices and edges in `V` and `EV`.
+"""
+function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
+    vertsnum = size(V, 1)
+    edgenum = size(EV, 1)
+    newverts = zeros(Int, vertsnum)
+    # KDTree constructor needs an explicit array of Float64
+    V = Array{Float64,2}(V)
+    kdtree = KDTree(permutedims(V))
+
+    # merge congruent vertices
+    todelete = []
+    i = 1
+    for vi in 1:vertsnum
+        if !(vi in todelete)
+            nearvs = Lar.inrange(kdtree, V[vi, :], err)
+            newverts[nearvs] .= i
+            nearvs = setdiff(nearvs, vi)
+            todelete = union(todelete, nearvs)
+            i = i + 1
+        end
+    end
+    nV = V[setdiff(collect(1:vertsnum), todelete), :]
+
+    # merge congruent edges
+    edges = Array{Tuple{Int, Int}, 1}(undef, edgenum)
+    oedges = Array{Tuple{Int, Int}, 1}(undef, edgenum)
+    for ei in 1:edgenum
+        v1, v2 = EV[ei, :].nzind
+        edges[ei] = Tuple{Int, Int}(sort([newverts[v1], newverts[v2]]))
+        oedges[ei] = Tuple{Int, Int}(sort([v1, v2]))
+    end
+    nedges = union(edges)
+    nedges = filter(t->t[1]!=t[2], nedges)
+    nedgenum = length(nedges)
+    nEV = spzeros(Int8, nedgenum, size(nV, 1))
+    # maps pairs of vertex indices to edge index
+    etuple2idx = Dict{Tuple{Int, Int}, Int}()
+    # builds `edge_map`
+    for ei in 1:nedgenum
+        nEV[ei, collect(nedges[ei])] .= 1
+        etuple2idx[nedges[ei]] = ei
+    end
+    for i in 1:length(edge_map)
+        row = edge_map[i]
+        row = map(x->edges[x], row)
+        row = filter(t->t[1]!=t[2], row)
+        row = map(x->etuple2idx[x], row)
+        edge_map[i] = row
+    end
+    # return new vertices and new edges
+    return Lar.Points(nV), nEV
 end
 
 end # module
