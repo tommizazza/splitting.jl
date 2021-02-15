@@ -175,3 +175,21 @@ Lar = LinearAlgebraicRepresentation
 		V, copEV, copFE = splitting.planar_arrangement_1(W,cop_EW)
 		@test V == [0.0 0.0; 1.0 0.0; 0.0 1.0; 0.0 0.5; -1.0 0.0; -1.0 0.5] 
 	end
+
+	@testset "frag_edge" begin
+		V=[1.0 4.0 1.0 4.0 0.0 3.0 0.0 3.0; 1.0 1.0 4.0 4.0 0.0 0.0 3.0 3.0  ]
+		EV=[[1, 2], [3, 4], [1, 3], [2, 4], [5, 6], [7, 8], [5, 7], [6, 8]]
+		W = convert(Lar.Points, V')
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		bigPI = splitting.spaceindex((V, EV))
+		a = splitting.frag_edge(W, cop_EV, 1, bigPI)
+		@test a[1] == [1.0 1.0; 4.0 1.0; 1.0 1.0; 3.0 1.0; 4.0 1.0]
+		V = [0.0 1.0 0.0 0.0 -1.0 -1.0; 
+		     0.0 0.0 1.0 0.5  0.0  0.5]
+		EV = [[1,2],[1,3],[2,3],[4,5],[4,6],[5,6]]
+		W = convert(Lar.Points, V')
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		bigPI = splitting.spaceindex((V, EV))
+		a = splitting.frag_edge(W, cop_EV, 1, bigPI)
+		@test a[1] == [0.0 0.0; 1.0 0.0; 0.0 0.0; 1.0 0.0] 
+	end

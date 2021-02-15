@@ -436,16 +436,38 @@ function planar_arrangement_1( V,copEV,sigma::Lar.Chain=spzeros(Int8,0),
 end
 
 function frag_edge(V, EV::Lar.ChainOp, edge_idx::Int, bigPI)
-    alphas = Dict{Float64, Int}()
+    #Thread safety data structures    
+    nth = nthreads()
+    lbp = length(bigPI[edge_idx])
+    alphaT=Array{Array{Float64}}(undef, lbp)
+    vertsT = Array{Array{Float64,2}}(undef, nth)
+    for i=1:nth
+         vertsT[i] = Array{Float64,2}(undef,0,2)
+    end
     edge = EV[edge_idx, :]
-    verts = V[edge.nzind, :]
-    for i in bigPI[edge_idx]
+    @threads for it=1:lbp
+        alphaT[it] = Array{Float64}(undef,0)
+        tid = threadid() #Thread associato all'iterazione corrente it
+        i=bigPI[edge_idx][it] #Edge da intersecare
         if i != edge_idx
             intersection = intersect_edges(V, edge, EV[i, :])
             for (point, alpha) in intersection
-                verts = [verts; point]
-                alphas[alpha] = size(verts, 1)
+                vertsT[tid] = [vertsT[tid]; point]
+                push!(alphaT[it],alpha) 
             end
+        end
+    end
+    #Inizializzo strutture da ritornare
+    verts = V[edge.nzind, :]
+    for i=1:nth
+        verts = [verts; vertsT[i]]
+    end
+    alphas = Dict{Float64, Int}()
+    n=3
+    for it=1:length(alphaT)
+        for alpha in alphaT[it]
+            alphas[alpha] = n
+            n=n+1
         end
     end
     alphas[0.0], alphas[1.0] = [1, 2]
@@ -460,6 +482,7 @@ function frag_edge(V, EV::Lar.ChainOp, edge_idx::Int, bigPI)
     return verts, ev
 end
 
+@btime frag_edge2(W, cop_EV, 1, bigPI)
 
 """
     intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
