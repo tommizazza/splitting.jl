@@ -4,6 +4,7 @@ using OrderedCollections
 using BenchmarkTools
 using LinearAlgebraicRepresentation
 using IntervalTrees
+using SparseArrays
 using LinearAlgebra
 Lar = LinearAlgebraicRepresentation
 
@@ -192,4 +193,56 @@ Lar = LinearAlgebraicRepresentation
 		bigPI = splitting.spaceindex((V, EV))
 		a = splitting.frag_edge(W, cop_EV, 1, bigPI)
 		@test a[1] == [0.0 0.0; 1.0 0.0; 0.0 0.0; 1.0 0.0] 
+	end
+
+	@testset "merge_vertices" begin
+		V=[1.0 4.0 1.0 4.0 0.0 3.0 0.0 3.0; 1.0 1.0 4.0 4.0 0.0 0.0 3.0 3.0  ]
+		EV=[[1, 2], [3, 4], [1, 3], [2, 4], [5, 6], [7, 8], [5, 7], [6, 8]]
+	
+		W = convert(Lar.Points, V')
+		copEV = Lar.coboundary_0(EV::Lar.Cells)
+		bigPI = splitting.spaceindex((V, EV))
+		edgenum = size(copEV, 1)
+		edge_map = Array{Array{Int, 1}, 1}(undef,edgenum)
+		rV = Lar.Points(zeros(0, 2))
+		rEV = SparseArrays.spzeros(Int8, 0, 0)
+		finalcells_num = 0
+	    	V=W
+		# sequential (iterative) processing of edge fragmentation
+		for i in 1:edgenum
+		    v, ev = Lar.Arrangement.frag_edge(V, copEV, i, bigPI)
+		    newedges_nums = map(x->x+finalcells_num, collect(1:size(ev, 1)))
+		    edge_map[i] = newedges_nums
+		    finalcells_num += size(ev, 1)
+		    rV = convert(Lar.Points, rV)
+		    rV, rEV = Lar.skel_merge(rV, rEV, v, ev)
+		end
+		V, copEV = rV, rEV
+    		V2, copEV2 = splitting.merge_vertices!(V, copEV, edge_map)
+		@test V2 == [1.0 1.0; 4.0 1.0; 3.0 1.0; 1.0 4.0; 4.0 4.0; 1.0 3.0; 0.0 0.0; 3.0 0.0; 0.0 3.0; 3.0 3.0]	
+		V = [0.0 1.0 0.0 1.0; 
+		     0.0 1.0 1.0 0.0]
+		EV = [[1,2],[3,4]]
+	
+		W = convert(Lar.Points, V')
+		copEV = Lar.coboundary_0(EV::Lar.Cells)
+		bigPI = splitting.spaceindex((V, EV))
+		edgenum = size(copEV, 1)
+		edge_map = Array{Array{Int, 1}, 1}(undef,edgenum)
+		rV = Lar.Points(zeros(0, 2))
+		rEV = SparseArrays.spzeros(Int8, 0, 0)
+		finalcells_num = 0
+	    	V=W
+		# sequential (iterative) processing of edge fragmentation
+		for i in 1:edgenum
+		    v, ev = Lar.Arrangement.frag_edge(V, copEV, i, bigPI)
+		    newedges_nums = map(x->x+finalcells_num, collect(1:size(ev, 1)))
+		    edge_map[i] = newedges_nums
+		    finalcells_num += size(ev, 1)
+		    rV = convert(Lar.Points, rV)
+		    rV, rEV = Lar.skel_merge(rV, rEV, v, ev)
+		end
+		V, copEV = rV, rEV
+    		V2, copEV2 = splitting.merge_vertices!(V, copEV, edge_map)
+		@test V2 == [0.0 0.0; 1.0 1.0; 0.5 0.5; 0.0 1.0; 1.0 0.0]		
 	end

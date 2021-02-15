@@ -311,11 +311,6 @@ function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, V2::Lar.Points, EV2::Lar.C
     EV = blockdiag(EV1,EV2)
     return V, EV
 end
-function skel_merge(V1::Lar.Points, EV1::Lar.ChainOp, FE1::Lar.ChainOp, V2::Lar.Points, EV2::Lar.ChainOp, FE2::Lar.ChainOp)
-    FE = blockdiag(FE1,FE2)
-    V, EV = skel_merge(V1, EV1, V2, EV2)
-    return V, EV, FE
-end
 
 function submanifold_mapping(vs)
     u1 = vs[2,:] - vs[1,:]
@@ -482,8 +477,6 @@ function frag_edge(V, EV::Lar.ChainOp, edge_idx::Int, bigPI)
     return verts, ev
 end
 
-@btime frag_edge2(W, cop_EV, 1, bigPI)
-
 """
     intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
 Intersect two 2D edges (`edge1` and `edge2`).
@@ -527,10 +520,6 @@ function intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
 end
 
 
-"""
-    merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
-Merge congruent vertices and edges in `V` and `EV`.
-"""
 function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
     vertsnum = size(V, 1)
     edgenum = size(EV, 1)
@@ -556,10 +545,10 @@ function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
     # merge congruent edges
     edges = Array{Tuple{Int, Int}, 1}(undef, edgenum)
     oedges = Array{Tuple{Int, Int}, 1}(undef, edgenum)
-    for ei in 1:edgenum
+    @threads for ei=1:edgenum
         v1, v2 = EV[ei, :].nzind
-        edges[ei] = Tuple{Int, Int}(sort([newverts[v1], newverts[v2]]))
-        oedges[ei] = Tuple{Int, Int}(sort([v1, v2]))
+        edges[ei]  = Tuple{Int, Int}(newverts[v1]<newverts[v2] ? [newverts[v1], newverts[v2]] : [newverts[v2], newverts[v1]])
+        oedges[ei] = Tuple{Int, Int}(v1<v2 ? [v1, v2] :  [v2, v1])
     end
     nedges = union(edges)
     nedges = filter(t->t[1]!=t[2], nedges)
@@ -572,12 +561,18 @@ function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
         nEV[ei, collect(nedges[ei])] .= 1
         etuple2idx[nedges[ei]] = ei
     end
-    for i in 1:length(edge_map)
-        row = edge_map[i]
-        row = map(x->edges[x], row)
-        row = filter(t->t[1]!=t[2], row)
-        row = map(x->etuple2idx[x], row)
-        edge_map[i] = row
+    @threads for i=1:length(edge_map)
+        rowT=Array{Tuple{Int64,Int64}}(undef,length(edge_map[i]))
+        len = length(edge_map[i])
+        for j=1:len
+            rowT[j]=edges[edge_map[i][j]]
+        end
+        filter!(t->t[1]!=t[2], rowT)
+        edge_map[i]=Array{Int64}(undef,length(rowT))
+        len2 = length(rowT)
+        for j=1:len2
+            edge_map[i][j]=etuple2idx[rowT[j]]
+        end        
     end
     # return new vertices and new edges
     return Lar.Points(nV), nEV
