@@ -246,3 +246,28 @@ Lar = LinearAlgebraicRepresentation
     		V2, copEV2 = splitting.merge_vertices!(V, copEV, edge_map)
 		@test V2 == [0.0 0.0; 1.0 1.0; 0.5 0.5; 0.0 1.0; 1.0 0.0]		
 	end
+
+	@testset "bic_components" begin
+		V=[1.0 4.0 1.0 4.0 0.0 3.0 0.0 3.0; 1.0 1.0 4.0 4.0 0.0 0.0 3.0 3.0  ]
+		EV=[[1, 2], [3, 4], [1, 3], [2, 4], [5, 6], [7, 8], [5, 7], [6, 8]]
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		A = splitting.biconnected_components(cop_EV)
+		@test A == [[3, 2, 4, 1], [7, 6, 8, 5]]
+		@test splitting.biconnectedComponent((V, EV)) == map(sort, A)
+		V = [0.0 1.0 0.0 1.0; 
+		     0.0 1.0 1.0 0.0]
+		EV = [[1,2],[3,4]]
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		A = splitting.biconnected_components(cop_EV)
+		@test A == []
+		@test splitting.biconnectedComponent((V, EV)) == map(sort, A)
+		V = [0.0 1.0 0.0 -2.0; 
+		     0.0 0.0 1.0 -2.0]
+		EV = [[1,2],[1,3],[2,3],[4,1]]
+		cop_EV = Lar.coboundary_0(EV::Lar.Cells)
+		A = splitting.biconnected_components(cop_EV)
+		@test A == [[2,3,1]]
+		@test splitting.biconnectedComponent((V, EV)) == map(sort, A)
+	
+	end
+

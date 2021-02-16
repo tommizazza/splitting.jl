@@ -578,4 +578,162 @@ function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
     return Lar.Points(nV), nEV
 end
 
+function biconnected_components(EV::Lar.ChainOp)
+
+    ps = Array{Tuple{Int, Int, Int}, 1}()
+    es = Array{Tuple{Int, Int}, 1}()
+    todel = Array{Int, 1}()
+    visited = Array{Int, 1}()
+    bicon_comps = Array{Array{Int, 1}, 1}()
+    hivtx = 1
+
+    function an_edge(point) # TODO: fix bug
+        # error? : BoundsError: attempt to access 0×0 SparseMatrix ...
+        edges = setdiff(EV[:, point].nzind, todel)
+        if length(edges) == 0
+            edges = [false]
+        end
+        edges[1]
+    end
+
+    function get_head(edge, tail)
+        setdiff(EV[edge, :].nzind, [tail])[1]
+    end
+
+    function v_to_vi(v)
+        i = findfirst(t->t[1]==v, ps)
+        # seems findfirst changed from 0 to Nothing
+        if typeof(i) == Nothing
+            return false
+        elseif i == 0
+            return false
+        else
+            return ps[i][2]
+        end
+    end
+
+    push!(ps, (1,1,1))
+    push!(visited, 1)
+    exit = false
+    while !exit
+        edge = an_edge(ps[end][1])
+        if edge != false
+            tail = ps[end][2]
+            head = get_head(edge, ps[end][1])
+            hi = v_to_vi(head)
+            if hi == false
+                hivtx += 1
+                push!(ps, (head, hivtx, ps[end][2]))
+                push!(visited, head)
+            else
+                if hi < ps[end][3]
+                    ps[end] = (ps[end][1], ps[end][2], hi)
+                end
+            end
+            push!(es, (edge, tail))
+            push!(todel, edge)
+        else
+            if length(ps) == 1
+                found = false
+                pop!(ps)
+                for i in 1:size(EV,2)
+                    if !(i in visited)
+                        hivtx = 1
+                        push!(ps, (i, hivtx, 1))
+                        push!(visited, i)
+                        found = true
+                        break
+                    end
+                end
+                if !found
+                    exit = true
+                end
+
+            else
+                if ps[end][3] == ps[end-1][2]
+                    edges = Array{Int, 1}()
+                    while true
+                        edge, tail = pop!(es)
+                        push!(edges, edge)
+                        if tail == ps[end][3]
+                            if length(edges) > 1
+                                push!(bicon_comps, edges)
+                            end
+                            break
+                        end
+                    end
+
+                else
+                    if ps[end-1][3] > ps[end][3]
+                        ps[end-1] = (ps[end-1][1], ps[end-1][2], ps[end][3])
+                    end
+                end
+                pop!(ps)
+            end
+        end
+    end
+    bicon_comps = sort(bicon_comps, lt=(x,y)->length(x)>length(y))
+    return bicon_comps
+end
+
+function DFV_visit( VV::Lar.Cells, out::Array, count::Int, visited::Array, parent::Array, d::Array, low::Array, stack::Array, u::Int )::Array
+		
+    visited[u] = true
+    count += 1
+    d[u] = count
+    low[u] = d[u]
+    for v in VV[u]
+        if ! visited[v]
+            push!(stack, [(u,v)])
+            parent[v] = u
+            DFV_visit( VV,out,count,visited,parent,d,low,stack, v )
+            if low[v] >= d[u]
+                push!(out, [outputComp(stack,u,v)])
+            end
+            low[u] = min( low[u], low[v] )
+        else
+            if ! (parent[u]==v) && (d[v] < d[u])
+                push!(stack, [(u,v)])
+            end
+            low[u] = min( low[u], d[v] )
+        end
+    end
+    out
+end
+
+function outputComp(stack::Array, u::Int, v::Int)::Array
+    out = []
+    while true
+        e = pop!(stack)[1]
+        push!(out,e)
+        if e == (u,v) 
+        	break
+        end
+    end
+    return [out] 
+end
+
+function biconnectedComponent(model)
+    W,EV = model
+    V = collect(1:size(W,2))
+    count = 0
+    stack,out = [],[]
+    visited = [false for v in V]
+    parent = Union{Int, Array{Any,1}}[[] for v in V]
+    d = Any[0 for v in V]
+    low = Any[0 for v in V]    
+    VV = Lar.verts2verts(EV)
+    out = Any[]
+    for u in V 
+        if ! visited[u] 
+            out = DFV_visit( VV,out,count,visited,parent,d,low,stack, u )
+        end
+    end
+    out = [component for component in out if length(component) >= 1]
+    EVs = [map(sort∘collect,edges) for edges in cat((out...)...,dims = 1) if length(edges)>1] 
+    EVs = filter(x->!isempty(x), EVs)
+    bico = map(x ->sort(collect(Set(hcat(x...)))), EVs)
+    return bico
+end
+
 end # module
