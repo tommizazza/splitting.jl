@@ -9,7 +9,7 @@ using DataStructures
 using OrderedCollections
 using LinearAlgebra
 using Base.Threads
-
+using Quadmath
 
 function spaceindex(model::Lar.LAR)::Array{Array{Int,1},1}
 	V,CV = model[1:2]
@@ -122,20 +122,20 @@ end
 
 # Questa funzione fa l'intersezione tra 2 segmenti e ritorna i parametri d'intersezione.
 function intersection(line1,line2)
-	x1,y1,x2,y2 = vcat(line1...)
-	x3,y3,x4,y4 = vcat(line2...)
-	det = (x4-x3)*(y1-y2)-(x1-x2)*(y4-y3)
-	if det != 0.0
-		a = 1/det
-		b = [y1-y2 x2-x1; y3-y4 x4-x3]  # x1-x2 => x2-x1 bug in the source link !!
-		c = [x1-x3; y1-y3]
-		(β,α) = a * b * c
-	else
-		return ()
-	end
-	return α,β
-end
+    x1::Float128,y1::Float128,x2::Float128,y2::Float128 = vcat(line1...)
+    x3::Float128,y3::Float128,x4::Float128,y4::Float128 = vcat(line2...)
 
+    det = (x4-x3)*(y1-y2)-(x1-x2)*(y4-y3)
+    if det != 0.0
+        a = 1/det
+        b = [y1-y2 x2-x1; y3-y4 x4-x3]  # x1-x2 => x2-x1 bug in the source link !!
+        c = [x1-x3; y1-y3]
+        (β,α) = a * b * c
+    else
+        return ()
+    end
+    return α,β
+end
 
 function linefragments(V,EV,sigma)
 	# Inizializzo dati
@@ -477,15 +477,11 @@ function frag_edge(V, EV::Lar.ChainOp, edge_idx::Int, bigPI)
     return verts, ev
 end
 
-"""
-    intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
-Intersect two 2D edges (`edge1` and `edge2`).
-"""
 function intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
     err = 10e-8
 
-    x1, y1, x2, y2 = vcat(map(c->V[c, :], edge1.nzind)...)
-    x3, y3, x4, y4 = vcat(map(c->V[c, :], edge2.nzind)...)
+    x1::Float128, y1::Float128, x2::Float128, y2::Float128 = vcat(map(c->V[c, :], edge1.nzind)...)
+    x3::Float128, y3::Float128, x4::Float128, y4::Float128 = vcat(map(c->V[c, :], edge2.nzind)...)
     ret = Array{Tuple{Lar.Points, Float64}, 1}()
 
     v1 = [x2-x1, y2-y1];
@@ -503,7 +499,7 @@ function intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
         for i in 1:2
             a = alpha*dot(v',(reshape(ps[i, :], 1, 2)-o))
             if 0 < a < 1
-                push!(ret, (ps[i:i, :], a))
+                push!(ret, (map(x -> convert(Float64,x),ps[i:i, :]), a))
             end
         end
     elseif !parallel
@@ -513,11 +509,12 @@ function intersect_edges(V::Lar.Points, edge1::Lar.Cell, edge2::Lar.Cell)
 
         if -err < a < 1+err && -err <= b <= 1+err
             p = [(x1 + a*(x2-x1))  (y1 + a*(y2-y1))]
-            push!(ret, (p, a))
+            push!(ret, (map(x -> convert(Float64,x),p), a))
         end
     end
     return ret
 end
+
 
 
 function merge_vertices!(V::Lar.Points, EV::Lar.ChainOp, edge_map, err=1e-4)
