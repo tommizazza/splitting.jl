@@ -733,4 +733,27 @@ function biconnectedComponent(model)
     return bico
 end
 
+function space_arrangement(V::Lar.Points, EV::Lar.ChainOp, FE::Lar.ChainOp, multiproc::Bool=false)
+
+	fs_num = size(FE, 1)
+model=(convert(Array{Float64,2},V'),Lar.compute_FV( EV,FE))
+	sp_idx =spaceindex(model)
+
+	rV = Lar.Points(undef, 0,3)
+    rEV = SparseArrays.spzeros(Int8,0,0)
+    rFE = SparseArrays.spzeros(Int8,0,0)
+
+	for sigma in 1:fs_num
+	   # print(sigma, "/", fs_num, "\r")
+	   nV, nEV, nFE = frag_face(V, EV, FE, sp_idx, sigma)
+	   a,b,c = Lar.skel_merge(rV, rEV, rFE, nV, nEV, nFE)
+	   rV=a; rEV=b; rFE=c
+	end
+
+	rV, rEV, rFE = Lar.Arrangement.merge_vertices(rV, rEV, rFE)
+	rCF = Lar.Arrangement.minimal_3cycles(rV, rEV, rFE)
+
+	return rV, rEV, rFE, rCF
+end
+
 end # module
