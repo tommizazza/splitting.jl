@@ -99,6 +99,12 @@ uuid = "de0858da-6303-5e67-8744-51eddeeeb8d7"
 deps = ["Printf"]
 uuid = "9abbd945-dff8-562f-b5e8-e1ebf5ef1b79"
 
+[[Quadmath]]
+deps = ["Printf", "Random", "Requires"]
+git-tree-sha1 = "5a8f74af8eae654086a1d058b4ec94ff192e3de0"
+uuid = "be4d8f0f-7fa4-5f49-b795-2f01399ab2dd"
+version = "0.5.5"
+
 [[REPL]]
 deps = ["InteractiveUtils", "Markdown", "Sockets"]
 uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
@@ -106,6 +112,12 @@ uuid = "3fa0cd96-eef1-5676-8a61-b3b8758bbffb"
 [[Random]]
 deps = ["Serialization"]
 uuid = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+
+[[Requires]]
+deps = ["UUIDs"]
+git-tree-sha1 = "cfbac6c1ed70c002ec6361e7fd334f02820d6419"
+uuid = "ae029012-a4dd-5104-9daa-d747884805df"
+version = "1.1.2"
 
 [[SHA]]
 uuid = "ea8e919c-243c-51af-8825-aaa63cd721ce"
